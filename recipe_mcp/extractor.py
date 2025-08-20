@@ -12,10 +12,11 @@ from bs4 import BeautifulSoup
 from .models import (
     Recipe, 
     Ingredient, 
-    RecipeMetadata, 
-    NutritionInfo, 
-    ExtractionResult
+    ExtractionResult,
+    ExtractionMethod,
+    ComplianceStatus
 )
+from .compliance import ComplianceHTTPSession
 
 
 logger = logging.getLogger(__name__)
@@ -153,43 +154,43 @@ class NYTCookingExtractor:
                     extraction_time=time.time() - start_time
                 )
             
-            # Create recipe metadata
-            metadata = RecipeMetadata(
-                source_url=url,
-                title=recipe_data.get("title", "Unknown Recipe"),
-                author=recipe_data.get("author"),
-                description=recipe_data.get("description"),
-                prep_time=recipe_data.get("prep_time"),
-                cook_time=recipe_data.get("cook_time"),
-                total_time=recipe_data.get("total_time"),
-                servings=recipe_data.get("servings"),
-                tags=recipe_data.get("tags", []),
-                rating=recipe_data.get("rating"),
-                review_count=recipe_data.get("review_count")
-            )
-            
             # Parse ingredients
             ingredients = []
             for ing_text in recipe_data.get("ingredients", []):
                 ingredient = self._parse_ingredient(ing_text)
                 ingredients.append(ingredient)
             
-            # Create nutrition info if available
-            nutrition = None
-            if include_nutrition and recipe_data.get("nutrition"):
-                nutrition = NutritionInfo(**recipe_data["nutrition"])
+            # Parse servings to integer if possible
+            servings = None
+            servings_str = recipe_data.get("servings")
+            if servings_str:
+                try:
+                    servings = int(''.join(filter(str.isdigit, servings_str)))
+                except (ValueError, TypeError):
+                    pass
             
-            # Create recipe
+            # Create recipe with new model structure
             recipe = Recipe(
-                metadata=metadata,
+                title=recipe_data.get("title", "Unknown Recipe"),
+                url=url,
                 ingredients=ingredients,
                 instructions=recipe_data.get("instructions", []),
-                nutrition=nutrition,
-                notes=recipe_data.get("notes", []),
-                equipment=recipe_data.get("equipment", [])
+                prep_time=recipe_data.get("prep_time"),
+                cook_time=recipe_data.get("cook_time"),
+                servings=servings,
+                nutrition=recipe_data.get("nutrition"),
+                tags=recipe_data.get("tags", []),
+                source="nyt_cooking",
+                author=recipe_data.get("author"),
+                description=recipe_data.get("description"),
+                total_time=recipe_data.get("total_time"),
+                rating=recipe_data.get("rating"),
+                review_count=recipe_data.get("review_count"),
+                extraction_method=ExtractionMethod.BROWSER_AUTOMATION,
+                compliance_status=ComplianceStatus.COMPLIANT
             )
             
-            logger.info(f"Successfully extracted recipe: {recipe.metadata.title}")
+            logger.info(f"Successfully extracted recipe: {recipe.title}")
             
             return ExtractionResult(
                 success=True,
@@ -416,13 +417,14 @@ class NYTCookingExtractor:
         # This is a simplified parser - could be enhanced with more sophisticated NLP
         text = ingredient_text.strip()
         
-        # Try to extract quantity, unit, and name
+        # Try to extract quantity, unit, and item name
         words = text.split()
         
         quantity = None
         unit = None
-        name = text
+        item = text  # Default to full text
         preparation = None
+        section = None  # Could be categorized later (produce, dairy, etc.)
         
         # Look for quantity at the beginning
         if words and self._looks_like_quantity(words[0]):
@@ -437,7 +439,7 @@ class NYTCookingExtractor:
                 name_words = remaining_words
             
             if name_words:
-                name = ' '.join(name_words)
+                item = ' '.join(name_words)
         
         # Look for preparation notes in parentheses or after comma
         if '(' in text and ')' in text:
@@ -445,19 +447,39 @@ class NYTCookingExtractor:
             end = text.find(')', start)
             if start < end:
                 preparation = text[start+1:end].strip()
-                name = (text[:start] + text[end+1:]).strip()
+                item = (text[:start] + text[end+1:]).strip()
+                # Remove quantity and unit from item if they were found
+                if quantity and unit:
+                    item = item.replace(f"{quantity} {unit}", "").strip()
+                elif quantity:
+                    item = item.replace(quantity, "").strip()
         elif ',' in text:
             parts = text.split(',', 1)
             if len(parts) == 2 and len(parts[1].strip()) < 50:  # Likely preparation note
-                name = parts[0].strip()
+                base_text = parts[0].strip()
                 preparation = parts[1].strip()
+                # Extract item from base text
+                base_words = base_text.split()
+                if base_words and self._looks_like_quantity(base_words[0]):
+                    if len(base_words) > 1 and self._looks_like_unit(base_words[1]):
+                        item = ' '.join(base_words[2:]) if len(base_words) > 2 else base_text
+                    else:
+                        item = ' '.join(base_words[1:]) if len(base_words) > 1 else base_text
+                else:
+                    item = base_text
+        
+        # Clean up item name
+        item = item.strip()
+        if not item:
+            item = "Unknown ingredient"
         
         return Ingredient(
-            name=name,
+            text=ingredient_text,
             quantity=quantity,
             unit=unit,
-            preparation=preparation,
-            raw_text=ingredient_text
+            item=item,
+            section=section,
+            preparation=preparation
         )
     
     def _looks_like_quantity(self, word: str) -> bool:

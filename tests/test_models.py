@@ -7,9 +7,10 @@ from pydantic import ValidationError
 from recipe_mcp.models import (
     Ingredient,
     Recipe,
-    RecipeMetadata,
-    NutritionInfo,
-    ExtractionResult
+    ExtractionResult,
+    ComplianceInfo,
+    ComplianceStatus,
+    ExtractionMethod
 )
 
 
@@ -19,76 +20,73 @@ class TestIngredient:
     def test_ingredient_creation(self):
         """Test basic ingredient creation."""
         ingredient = Ingredient(
-            name="flour",
+            text="2 cups flour, sifted",
             quantity="2",
             unit="cups",
-            preparation="sifted",
-            raw_text="2 cups flour, sifted"
+            item="flour",
+            preparation="sifted"
         )
         
-        assert ingredient.name == "flour"
+        assert ingredient.text == "2 cups flour, sifted"
         assert ingredient.quantity == "2"
         assert ingredient.unit == "cups"
+        assert ingredient.item == "flour"
         assert ingredient.preparation == "sifted"
-        assert ingredient.raw_text == "2 cups flour, sifted"
     
     def test_ingredient_minimal(self):
         """Test ingredient with minimal data."""
         ingredient = Ingredient(
-            name="salt",
-            raw_text="salt"
+            text="salt",
+            item="salt"
         )
         
-        assert ingredient.name == "salt"
+        assert ingredient.text == "salt"
+        assert ingredient.item == "salt"
         assert ingredient.quantity is None
         assert ingredient.unit is None
         assert ingredient.preparation is None
-        assert ingredient.raw_text == "salt"
-
-
-class TestRecipeMetadata:
-    """Tests for RecipeMetadata model."""
     
-    def test_metadata_creation(self):
-        """Test recipe metadata creation."""
-        metadata = RecipeMetadata(
-            source_url="https://cooking.nytimes.com/recipes/1234-test-recipe",
-            title="Test Recipe",
-            author="Test Chef",
-            description="A test recipe",
-            prep_time="10 minutes",
-            cook_time="20 minutes",
-            servings="4"
+    def test_ingredient_auto_item_extraction(self):
+        """Test automatic item extraction from text."""
+        ingredient = Ingredient(
+            text="2 cups all-purpose flour"
         )
         
-        assert str(metadata.source_url) == "https://cooking.nytimes.com/recipes/1234-test-recipe"
-        assert metadata.title == "Test Recipe"
-        assert metadata.author == "Test Chef"
-        assert metadata.description == "A test recipe"
-        assert metadata.prep_time == "10 minutes"
-        assert metadata.cook_time == "20 minutes"
-        assert metadata.servings == "4"
-        assert isinstance(metadata.extracted_at, datetime)
+        assert ingredient.text == "2 cups all-purpose flour"
+        assert "flour" in ingredient.item.lower()
+
+
+class TestComplianceInfo:
+    """Tests for ComplianceInfo model."""
     
-    def test_metadata_minimal(self):
-        """Test metadata with minimal required fields."""
-        metadata = RecipeMetadata(
-            source_url="https://cooking.nytimes.com/recipes/1234-test-recipe",
-            title="Test Recipe"
+    def test_compliance_info_creation(self):
+        """Test compliance info creation."""
+        compliance_info = ComplianceInfo(
+            status=ComplianceStatus.COMPLIANT,
+            daily_usage_count=5,
+            daily_limit=50,
+            session_id="test-session-123"
         )
         
-        assert str(metadata.source_url) == "https://cooking.nytimes.com/recipes/1234-test-recipe"
-        assert metadata.title == "Test Recipe"
-        assert metadata.author is None
-        assert metadata.tags == []
+        assert compliance_info.status == ComplianceStatus.COMPLIANT
+        assert compliance_info.daily_usage_count == 5
+        assert compliance_info.daily_limit == 50
+        assert compliance_info.session_id == "test-session-123"
+        assert compliance_info.warnings == []
     
-    def test_metadata_invalid_url(self):
-        """Test metadata with invalid URL."""
-        with pytest.raises(ValidationError):
-            RecipeMetadata(
-                source_url="not-a-url",
-                title="Test Recipe"
-            )
+    def test_compliance_info_rate_limited(self):
+        """Test rate limited compliance info."""
+        compliance_info = ComplianceInfo(
+            status=ComplianceStatus.RATE_LIMITED,
+            daily_usage_count=50,
+            daily_limit=50,
+            session_id="test-session-123",
+            warnings=["Daily limit reached"]
+        )
+        
+        assert compliance_info.status == ComplianceStatus.RATE_LIMITED
+        assert compliance_info.daily_usage_count == 50
+        assert compliance_info.warnings == ["Daily limit reached"]
 
 
 class TestRecipe:
@@ -96,14 +94,9 @@ class TestRecipe:
     
     def test_recipe_creation(self):
         """Test complete recipe creation."""
-        metadata = RecipeMetadata(
-            source_url="https://cooking.nytimes.com/recipes/1234-test-recipe",
-            title="Test Recipe"
-        )
-        
         ingredients = [
-            Ingredient(name="flour", raw_text="2 cups flour"),
-            Ingredient(name="sugar", raw_text="1 cup sugar")
+            Ingredient(text="2 cups flour", item="flour"),
+            Ingredient(text="1 cup sugar", item="sugar")
         ]
         
         instructions = [
@@ -112,76 +105,52 @@ class TestRecipe:
         ]
         
         recipe = Recipe(
-            metadata=metadata,
-            ingredients=ingredients,
-            instructions=instructions
-        )
-        
-        assert recipe.metadata.title == "Test Recipe"
-        assert len(recipe.ingredients) == 2
-        assert len(recipe.instructions) == 2
-        assert recipe.notes == []
-        assert recipe.equipment == []
-    
-    def test_recipe_to_google_keep_format(self):
-        """Test conversion to Google Keep format."""
-        metadata = RecipeMetadata(
-            source_url="https://cooking.nytimes.com/recipes/1234-test-recipe",
             title="Test Recipe",
-            prep_time="10 minutes",
-            cook_time="20 minutes",
-            servings="4"
-        )
-        
-        ingredients = [
-            Ingredient(name="flour", raw_text="2 cups flour"),
-            Ingredient(name="sugar", raw_text="1 cup sugar")
-        ]
-        
-        instructions = [
-            "Mix flour and sugar",
-            "Bake for 20 minutes"
-        ]
-        
-        recipe = Recipe(
-            metadata=metadata,
+            url="https://cooking.nytimes.com/recipes/1234-test-recipe",
             ingredients=ingredients,
             instructions=instructions,
-            notes=["Let cool before serving"]
+            source="nyt_cooking"
         )
         
-        keep_format = recipe.to_google_keep_format()
-        
-        assert keep_format["title"] == "Recipe: Test Recipe"
-        assert "**Test Recipe**" in keep_format["content"]
-        assert "• 2 cups flour" in keep_format["content"]
-        assert "• 1 cup sugar" in keep_format["content"]
-        assert "1. Mix flour and sugar" in keep_format["content"]
-        assert "2. Bake for 20 minutes" in keep_format["content"]
-        assert "Prep: 10 minutes | Cook: 20 minutes" in keep_format["content"]
-        assert "Servings: 4" in keep_format["content"]
-        assert "• Let cool before serving" in keep_format["content"]
-        assert "Source: https://cooking.nytimes.com/recipes/1234-test-recipe" in keep_format["content"]
-        assert keep_format["labels"] == ["recipe"]
-
-
-class TestNutritionInfo:
-    """Tests for NutritionInfo model."""
+        assert recipe.title == "Test Recipe"
+        assert recipe.url == "https://cooking.nytimes.com/recipes/1234-test-recipe"
+        assert len(recipe.ingredients) == 2
+        assert len(recipe.instructions) == 2
+        assert recipe.source == "nyt_cooking"
+        assert isinstance(recipe.extracted_at, datetime)
+        assert recipe.extraction_method == ExtractionMethod.BROWSER_AUTOMATION
+        assert recipe.compliance_status == ComplianceStatus.UNKNOWN
     
-    def test_nutrition_creation(self):
-        """Test nutrition info creation."""
-        nutrition = NutritionInfo(
-            calories=250,
-            protein="10g",
-            carbohydrates="30g",
-            fat="8g"
+    def test_recipe_with_metadata(self):
+        """Test recipe with full metadata."""
+        recipe = Recipe(
+            title="Chocolate Chip Cookies",
+            url="https://cooking.nytimes.com/recipes/1234-cookies",
+            ingredients=[
+                Ingredient(text="2 cups flour", item="flour"),
+                Ingredient(text="1 cup butter", item="butter")
+            ],
+            instructions=["Mix ingredients", "Bake for 12 minutes"],
+            prep_time="15 minutes",
+            cook_time="12 minutes",
+            servings=24,
+            author="Test Chef",
+            description="Delicious homemade cookies",
+            tags=["dessert", "cookies"],
+            source="nyt_cooking",
+            rating=4.5,
+            review_count=150
         )
         
-        assert nutrition.calories == 250
-        assert nutrition.protein == "10g"
-        assert nutrition.carbohydrates == "30g"
-        assert nutrition.fat == "8g"
-        assert nutrition.fiber is None
+        assert recipe.title == "Chocolate Chip Cookies"
+        assert recipe.author == "Test Chef"
+        assert recipe.description == "Delicious homemade cookies"
+        assert recipe.prep_time == "15 minutes"
+        assert recipe.cook_time == "12 minutes"
+        assert recipe.servings == 24
+        assert recipe.tags == ["dessert", "cookies"]
+        assert recipe.rating == 4.5
+        assert recipe.review_count == 150
 
 
 class TestExtractionResult:
@@ -189,38 +158,57 @@ class TestExtractionResult:
     
     def test_extraction_success(self):
         """Test successful extraction result."""
-        metadata = RecipeMetadata(
-            source_url="https://cooking.nytimes.com/recipes/1234-test-recipe",
-            title="Test Recipe"
+        recipe = Recipe(
+            title="Test Recipe",
+            url="https://cooking.nytimes.com/recipes/1234-test-recipe",
+            ingredients=[],
+            instructions=[],
+            source="nyt_cooking"
         )
         
-        recipe = Recipe(
-            metadata=metadata,
-            ingredients=[],
-            instructions=[]
+        compliance_info = ComplianceInfo(
+            status=ComplianceStatus.COMPLIANT,
+            daily_usage_count=5,
+            daily_limit=50,
+            session_id="test-session"
         )
         
         result = ExtractionResult(
             success=True,
             recipe=recipe,
-            extraction_time=1.5
+            extraction_time=1.5,
+            compliance_info=compliance_info
         )
         
         assert result.success is True
         assert result.recipe is not None
+        assert result.recipe.title == "Test Recipe"
         assert result.error is None
         assert result.warnings == []
         assert result.extraction_time == 1.5
+        assert result.compliance_info is not None
+        assert result.compliance_info.status == ComplianceStatus.COMPLIANT
     
     def test_extraction_failure(self):
         """Test failed extraction result."""
+        compliance_info = ComplianceInfo(
+            status=ComplianceStatus.RATE_LIMITED,
+            daily_usage_count=50,
+            daily_limit=50,
+            session_id="test-session",
+            warnings=["Daily limit exceeded"]
+        )
+        
         result = ExtractionResult(
             success=False,
-            error="Network timeout",
-            extraction_time=30.0
+            error="Daily extraction limit exceeded",
+            extraction_time=0.1,
+            compliance_info=compliance_info
         )
         
         assert result.success is False
         assert result.recipe is None
-        assert result.error == "Network timeout"
-        assert result.extraction_time == 30.0
+        assert result.error == "Daily extraction limit exceeded"
+        assert result.compliance_info.status == ComplianceStatus.RATE_LIMITED
+        assert result.compliance_info.warnings == ["Daily limit exceeded"]
+        assert result.extraction_time == 0.1
