@@ -10,6 +10,12 @@ In Claude I ask it to read the urls in the grocery list "Meals for the week" sec
 
 Who knows if the code sucks, at this point it works well enough for me, maybe for you too.
 
+To accomplish this I have sinned. Here's the relevant links:
+
+1. https://github.com/edwinavalos/gkeepapi My fork of https://github.com/kiwiz/gkeepapi which adds [support for lists manipulations](https://github.com/edwinavalos/gkeepapi/commit/a826934177ac6ecb03c767e17ba1b56b89a5d068).
+2. https://github.com/edwinavalos/keep-mcp My fork of https://github.com/feuerdev/keep-mcp which adds [support for list tools](https://github.com/edwinavalos/keep-mcp/pull/1/files)
+3. [The Secret Sauce](https://www.duckbrand.com/products/duck-tape/utility/silver-188-in-x-45-yd-2-pk)
+
 A Model Context Protocol (MCP) server for extracting recipes rom NYT Cooking using Playwright browser automation.
 
 ## Project Overview
