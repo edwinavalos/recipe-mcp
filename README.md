@@ -4,7 +4,7 @@
 
 ## The developers work flow
 
-We usually get recipes from the NYT and we add it to the grocery list under a "Meals for the week" Top level item in a Google Keep list. Then on Saturday morning we put on cartoons for the kid, and build the menu for the menu for the week. Getting items notated down into our preferred tools is heavy on context switching which is what I'm bad at.
+We usually get recipes from the NYT and we add it to the grocery list under a "Meals for the week" Top level item in a Google Keep list. Then on Saturday morning we put on cartoons for the kid, and build the menu for the week. Getting items notated down into our preferred tools is heavy on context switching which is what I'm bad at.
 
 In Claude I ask it to read the urls in the grocery list "Meals for the week" section. It fetches the urls, gets the ingredients, adds the items to the ingredients list, and then sorts them into categories organized by the way we do our grocery shopping at the store. Next step is that I plan to take over the world, cause this was a cool thing I've wanted to do as a 'quick project' and I knocked it out in a day and a halfish of prompting infrequently. Shoutout to [omnara](https://github.com/omnara-ai/omnara) for letting me answer questions from Claude, or prompt it for the next steps while on a walk.
 
