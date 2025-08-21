@@ -160,8 +160,4 @@ The server respects NYT Cooking's servers by:
 
 ## Legal Compliance
 
-This server is designed for personal use by NYT Cooking subscribers only. It:
-- Requires a valid subscription for access
-- Respects robots.txt and terms of service
-- Does not redistribute copyrighted content
-- Focuses on personal recipe management use cases
+This server is designed for personal use. See note in [README.md](../README.md)
