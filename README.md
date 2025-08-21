@@ -59,9 +59,10 @@ recipe-mcp/
 └── README.md            # This file
 ```
 
-## Legal Compliance
+## Fair Use
 
-This tool is designed for personal use by NYT Cooking subscribers only. It respects the terms of service and is intended for legitimate personal recipe management and meal planning purposes.
+It is my understanding that this is fair use under the [terms of service](https://help.nytimes.com/115014893428-Terms-of-Service). But please also read it yourself and make your own judgement. I haven't encountered a paywall on NYT links so far, but will monitor if it runs into things.
+
 
 ## Development
 
@@ -81,8 +82,4 @@ ruff format
 
 ## Contributing
 
-This is a private repository for personal use. Contributions are not currently accepted.
-
-## License
-
-Private - All rights reserved
+This is a repository for personal use. Contributions are not currently accepted. If you want to modify this, fork it, and let me know and I'll probably open it up after doing some significant due diligence on all the code. This was very very vibe coded.
